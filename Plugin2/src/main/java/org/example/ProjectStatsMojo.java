@@ -33,6 +33,7 @@ public class ProjectStatsMojo extends AbstractMojo {
         }
 
         List<String> reportLines = new ArrayList<>();
+        reportLines.add("----------------------------------------");
         reportLines.add("PROJECT CODE STATISTICS: " + project.getArtifactId());
         reportLines.add("----------------------------------------");
 

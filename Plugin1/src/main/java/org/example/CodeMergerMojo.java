@@ -10,7 +10,7 @@ import org.apache.maven.project.MavenProject;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.List;
 
 @Mojo(name = "merge", defaultPhase = LifecyclePhase.PACKAGE)
@@ -24,7 +24,6 @@ public class CodeMergerMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException {
-
         List<String> sourceRoots = project.getCompileSourceRoots();
 
         if (sourceRoots == null || sourceRoots.isEmpty()) {
@@ -32,46 +31,53 @@ public class CodeMergerMojo extends AbstractMojo {
             return;
         }
 
+        List<String> mergedLines = new ArrayList<>();
+        List<File> javaFiles = new ArrayList<>();
+
+        for (String root : sourceRoots) {
+            File rootDir = new File(root);
+            if (rootDir.exists() && rootDir.isDirectory()) {
+                findJavaFiles(rootDir, javaFiles);
+            }
+        }
+
+        for (File file : javaFiles) {
+            try {
+                mergedLines.add("");
+                mergedLines.add("// ------------------------------------------");
+                mergedLines.add("// FILE: " + file.getName());
+                mergedLines.add("// ------------------------------------------");
+                mergedLines.add("");
+
+                List<String> fileLines = Files.readAllLines(file.toPath());
+                mergedLines.addAll(fileLines);
+
+            } catch (IOException e) {
+                getLog().error("Could not read file: " + file.getName(), e);
+            }
+        }
+
         try {
             if (outputFile.getParentFile() != null) {
                 outputFile.getParentFile().mkdirs();
             }
-
-            Files.deleteIfExists(outputFile.toPath());
-            Files.createFile(outputFile.toPath());
-
-            for (String root : sourceRoots) {
-                File rootDir = new File(root);
-                if (rootDir.exists() && rootDir.isDirectory()) {
-                    mergeDirectory(rootDir);
-                }
-            }
-
-            getLog().info(" BUILD SUCCESS " + outputFile.getAbsolutePath());
+            Files.write(outputFile.toPath(), mergedLines);
+            getLog().info("BUILD SUCCESS: " + outputFile.getAbsolutePath());
 
         } catch (IOException e) {
-            throw new MojoExecutionException(" ERROR ", e);
+            throw new MojoExecutionException("ERROR", e);
         }
     }
 
-    private void mergeDirectory(File directory) throws IOException {
-        File[] files = directory.listFiles();
+    private void findJavaFiles(File dir, List<File> fileList) {
+        File[] files = dir.listFiles();
         if (files == null) return;
 
         for (File file : files) {
             if (file.isDirectory()) {
-                mergeDirectory(file);
-
+                findJavaFiles(file, fileList);
             } else if (file.getName().endsWith(".java")) {
-                List<String> lines = Files.readAllLines(file.toPath());
-
-                String separator = "\n\n" +
-                        "// ------------------------------------------\n" +
-                        "// FILE: " + file.getName() + "\n" +
-                        "// ------------------------------------------\n\n";
-
-                Files.write(outputFile.toPath(), separator.getBytes(), StandardOpenOption.APPEND);
-                Files.write(outputFile.toPath(), lines, StandardOpenOption.APPEND);
+                fileList.add(file);
             }
         }
     }
